@@ -25,7 +25,7 @@ from pydantic import BaseModel
 # --- app + config ----------------------------------------------------------
 app = FastAPI(title="SecureNotes API", version="1.0")
 
-# A secret used to sign things. Keep it safe.
+# A secret used to sign things. Keep it safe. THIS IS A SECRET KEY THAT SHOULD BE IN A .ENV FILE AO2 Security Misconfiguration
 SECRET_KEY = "supersecret123"
 
 app.add_middleware(
@@ -59,7 +59,7 @@ def init_db():
         );
         """
     )
-    # seed: one admin, two normal users, a few notes
+    # seed: one admin, two normal users, a few notes, THE PASSWORDS SHOULD BE HASHED
     db.execute("INSERT INTO users (username, password, is_admin) VALUES ('admin','admin123',1)")
     db.execute("INSERT INTO users (username, password, is_admin) VALUES ('alice','alicepass',0)")
     db.execute("INSERT INTO users (username, password, is_admin) VALUES ('bob','bobpass',0)")
@@ -109,7 +109,7 @@ def register(creds: Credentials):
     db.commit()
     return {"message": f"user {creds.username} created"}
 
-
+# AO5 Injection DAHIL DUN SA creds.username STRING NA PWEDENG IEXPLOIT BY PUTTING A RAW SQL COMMAND DOON 
 @app.post("/login")
 def login(creds: Credentials):
     row = db.execute(
@@ -128,7 +128,7 @@ def list_my_notes(authorization: str = Header(default=None)):
     rows = db.execute("SELECT * FROM notes WHERE owner_id = ?", (user["id"],)).fetchall()
     return [dict(r) for r in rows]
 
-
+#AO1 Broken Access Control DI CHINECHECK KUNG KANINONG OWNER YUNG NOTE_ID HSADFHASFHF
 @app.get("/notes/{note_id}")
 def get_note(note_id: int, authorization: str = Header(default=None)):
     user = current_user(authorization)
