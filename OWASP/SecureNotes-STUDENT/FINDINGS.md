@@ -2,15 +2,15 @@
 
 There are **6** security bugs planted in `app/main.py`. Fill one row per bug.
 
-| # | OWASP 2025 code & name        | Where (route / line) | How an attacker abuses it | Your fix (1 line) |
-| - | ----------------------------- | -------------------- | ------------------------- | ----------------- |
-| 1 | AO2 Security Misconfiguration | Line 29, Line 33     |                           |                   |
-| 2 | AO4 Cryptographic Failures    | Line 63 to 67        |                           |                   |
-| 3 | AO5 Injection                 | Line 116             |                           |                   |
-| 4 | A01 Broken Access Control     | Line 135             |                           |                   |
-| 5 |                               |                      |                           |                   |
-| 6 |                               |                      |                           |                   |
+| \# | OWASP 2025 code & name | Where (route / line) | How an attacker abuses it | Your fix (1 line) |
+| --- | --- | --- | --- | --- |
+| 1 | AO2 Security Misconfiguration | Line 29, Line 33 | Hardcoding the SECRET_KEY in the code base gives everyone with access to the repo the ability to sign anything it signs; allow_origins=\['\*'\] allows any rogue website to use the victim's session cross origin. This particular line should be added to line 98 in this list. | Read the secret out of the environment variable, limit the allow_origins to the actual frontend origins. |
+| 2 | AO4 Cryptographic Failures | Line 63 to 67 | Plaintext passwords saved — any person accessing the DB (through /admin/users vulnerability, SQLite, or a leak of the DB) will see everyone’s passwords, which the users have reused somewhere else. | Keep your passwords salted with PBKDF2/bcrypt, and check with [hmac.compare](http://hmac.compare)\_digest; under no circumstances return the password field. |
+| 3 | AO5 Injection | Line 116 | “Sends username admin’ --” /login -&gt; f-string creates WHERE username = ‘admin’ --’ -&gt; returns admin’s record without checking the password; “‘ OR ‘1’=’1” variations return arbitrary records. | WHERE username = ? parameterized query: with (creds.username,) – no f-strings in SQL. |
+| 4 | A01 Broken Access Control | Line 135 | Log in as Alice (any account), then use GET /notes/2 the query is based on note id only, hence, iteration from 1 to n shows all private notes of all users. | Make sure the query is scoped to the caller: WHERE id = ? AND owner_id = ? (alternatively verify row\["owner_id"\] == user\["id"\], otherwise 403/404). |
+| 5 | A07 Authentication Failures | Line 122 | The "token" provided by /login is just the user id number - an unsigned and incremental value that does not expire. The attacker uses "Authorization: Bearer 1" for /notes or /admin/users without logging in and instantly becomes admin; any user account can be impersonated using the guessed id number. The 404 and 401 responses on the same endpoint also reveal existing usernames. | Generate an HMAC-signed token (of user_id:expiry:signature format using hmac/hashlib) that current_user validates on signature and expiry, and generate one standard 401 error for both login cases. |
+| 6 | A10 Exceptional Conditions | Line 155 to 159 | Admin Check will cause 403 to be raised inside try block, but "except Exception: pass" block will catch that error and program will move on to SELECT \* FROM users - and thus Admin Check will not stop anyone. All requests to /admin/users will dump users table with plaintext passwords. | Take out the try/except and fail closed – return a 403 if user is either missing or not user\["is_admin"\], and filter for just id, username, is_admin. |
 
 ## Reflection (3–4 sentences)
 
-Which bug would do the most damage in a real app, and why?
+The A10 failure-admin check will cause the most harm when implemented in production as it requires no authentication and no skills to access, a single GET request without any token will dump the whole users' table. Moreover, it leads to the worst consequences possible because together with the passwords in plain text from the A04, it grants an attacker access to every user in the system. A check that fails without notifying about the failure is much worse than not having any check at all as it gives the illusion of security but provides none.
